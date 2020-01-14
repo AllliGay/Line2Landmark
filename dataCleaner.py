@@ -1,10 +1,14 @@
 import os
-
+import sys
 
 # sample data on names.txt
 
-ROOT_DIR = 'Data/'
-SAMPLE_DIR = 'SampleData'
+if len(sys.argv) < 3:
+    print("Usage: python dataCleaner.py PICS_DIR DEST_DIR")
+    exit(0)
+
+ROOT_DIR = sys.argv[1]
+SAMPLE_DIR = sys.argv[2]
 IMG_LIST_DIR = 'names.txt'
 
 
