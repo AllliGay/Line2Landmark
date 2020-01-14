@@ -22,7 +22,7 @@ with open(IMG_LIST_DIR) as f:
     pngs = f.readlines()
 
 for png in pngs:
-    src = os.path.join(ROOT_DIR,png)
+    src = os.path.join(ROOT_DIR,png.strip())
     dst = SAMPLE_DIR+'/'
     cmd_cp = 'cp {0} {1}'.format(src,dst)
     
