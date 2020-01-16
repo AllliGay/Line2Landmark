@@ -229,44 +229,65 @@ def _get_detections(model, args):
         
             cv2.rectangle(raw_image, (int((x-box[0])*128), int((y-box[1])*128)),\
                       (int((x+box[2])*128), int((y+box[3])*128)),(255,0,0),3)
+            
+            with open('test_boxes.txt','a') as f:
+                f.write('{},{} {} {} {}\n'.format(path.split('/')[-1],int((x-box[0])*128/scale),\
+                      int((y-box[1])*128/scale), int((x+box[2])*128/scale), int((y+box[3])*128/scale)))
+                                           
         cv2.imwrite('/home/zjc793532302/retinanet/results/{}.jpg'.format(i), raw_image)
-        #break
-        continue
+
+def _get_single_detection(model, path):
+    #path = args.image_path
+    if os.path.exists(path) == 0:
+        print('image path not exists')
+        return
+    image = np.asarray(Image.open(path).convert('RGB'))
+    raw_image = image[:, :, ::-1].copy()
+    mode = 'caffe'
+    if 'mobilenet' in args.backbone or 'densenet' in args.backbone or 'xception' in args.backbone:
+        mode = 'tf'
         
+    image = np.array(raw_image.copy(), np.float32)
+    image[..., 0] -= 103.939
+    image[..., 1] -= 116.779
+    image[..., 2] -= 123.68
+    image, scale = resize_image(image, args.image_min_side, args.image_max_side)
+    raw_image, scale = resize_image(raw_image, args.image_min_side, args.image_max_side)
         
+    if keras.backend.image_data_format() == 'channels_first':
+        image = image.transpose((2, 0, 1))
 
-        # select indices which have a score above the threshold
-        indices = np.where(scores[0, :] > args.score_threshold)[0]
-
-        # select those scores
-        scores = scores[0][indices]
-
-        # find the order with which to sort the scores
-        scores_sort = np.argsort(-scores)[:args.max_detections]
-
-        # select detections
-        image_boxes      = boxes[0, indices[scores_sort], :]
-        image_scores     = scores[scores_sort]
-        image_labels     = labels[0, indices[scores_sort]]
-        image_detections = np.concatenate([image_boxes, np.expand_dims(image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
-
-        if args.save_path is not None:
-            draw_detections(raw_image, image_boxes, image_scores, image_labels, label_to_name=generator.label_to_name)
-
-            cv2.imwrite(os.path.join(save_path, '{}.png'.format(i)), raw_image)
-
-        # copy detections to all_detections
-        for label in range(generator._num_classes):
-
-            all_detections[i][label] = image_detections[image_detections[:, -1] == label, :-1]
-
-    return all_detections
+    # run network
+    boxes, scores = model.predict_on_batch(np.expand_dims(image, axis=0))[:3]
+        
+    from IPython import embed
+    #embed()
+    h, w, _ = raw_image.shape
+    feature_h = (h + 127) // 128
+    feature_w = (w + 127) // 128
+        
+    #index = scores[0].argmax(0)
+    indexes = np.argsort(-scores.squeeze())[:1]
+    for index in indexes:
+            
+        box = boxes[0][index]
+        y = index // feature_w
+        x = index - y * feature_w
+        
+        cv2.rectangle(raw_image, (int((x-box[0])*128), int((y-box[1])*128)),\
+                      (int((x+box[2])*128), int((y+box[3])*128)),(255,0,0),3)
+            
+        box = [int((x-box[0])*128/scale),int((y-box[1])*128/scale),int((x+box[2])*128/scale), int((y+box[3])*128/scale)]
+                                           
+        cv2.imwrite('/home/zjc793532302/retinanet/results/{}.jpg'.format(0), raw_image)
+    return  box
 
 def parse_args(args):
     """ Parse the arguments.
     """
     parser     = argparse.ArgumentParser(description='Evaluation script for a RetinaNet network.')
     parser.add_argument('model',              help='Path to RetinaNet model.')
+    parser.add_argument('--image_path',       help='Path to the test image.', default=None)
     parser.add_argument('--convert-model',    help='Convert the model to an inference model (ie. the input is a training model).', action='store_true', default=True)
     parser.add_argument('--backbone',         help='The backbone of the model.', default='resnet50')
     parser.add_argument('--gpu',              help='Id of the GPU to use (as reported by nvidia-smi).', default='-1')
@@ -313,15 +334,17 @@ def main(args=None):
     '''
     # print model summary
     # print(model.summary())
-
-    # start evaluation
-    all_boxes = _get_detections(
+    
+    if args.image_path != None:
+        box = _get_single_detection(model, args.image_path)
+    else:
+        # start evaluation
+        all_boxes = _get_detections(
         
-        model,
-        args
-    )
+            model,
+            args
+        )
 
-    generator._write_voc_results_file(all_boxes)
 
 if __name__ == '__main__':
     main()
