@@ -25,9 +25,9 @@ ret, input_img = cv2.threshold(input_img, 250, 255, cv2.THRESH_BINARY_INV)
 import numpy as np
 kernel = np.ones((5, 5), np.uint8) # or try (3, 3)?
 # For whose lines are too thin, you can erode it
-input_img = cv2.erode(input_img, kernel, iterations=1)
-# For whose lines are too thick, you can dilate it
 input_img = cv2.dilate(input_img, kernel, iterations=1)
+# For whose lines are too thick, you can dilate it
+input_img = cv2.erode(input_img, kernel, iterations=1)
 
 input_img = cv2.resize(input_img, (image_size, image_size))
 ```
