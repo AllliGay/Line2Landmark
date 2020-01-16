@@ -25,7 +25,9 @@ if MODEL_NAME is 'CGAN':
                         checkpoint_dir=gan_checkpoint_dir, input_c_dim=1)
 elif MODEL_NAME is 'CycleGAN':
     from CycleGAN.cycle_use import inf_and_read
-    cyclegan_model_path = '../CycleGAN/pretrained/line1162pic.pb'
+    cyclegan_model_path = '../CycleGAN/pretrained/line2pic.pb'
+
+from AutoEncoder.auto_encoder_cosine import get_sim_image
 
 # Declare a flask app
 app = Flask(__name__)
@@ -41,9 +43,9 @@ def gan_model_predict(img):
         generate_img = gan_model.predict(img)
     elif MODEL_NAME is 'CycleGAN':
         generate_img = inf_and_read(img, cyclegan_model_path)
-    generate_img = cv2.resize(generate_img, (h, w))
+    generate_img = cv2.resize(generate_img, (w, h))
     cv2.imwrite('static/test.jpg', generate_img)
-    generate_img = Image.fromarray(cv2.cvtColor(generate_img, cv2.COLOR_BGR2RGB))
+    # generate_img = Image.fromarray(cv2.cvtColor(generate_img, cv2.COLOR_BGR2RGB))
 
     return generate_img
 
@@ -65,6 +67,12 @@ def predict():
 
         # Make prediction
         generate_img = gan_model_predict(img)
+
+        match_img = get_sim_image('static/test.jpg')
+
+        match_img = cv2.resize(match_img, (generate_img.shape[1], generate_img.shape[0]))
+        con_img = np.concatenate((generate_img, match_img), 1)
+        cv2.imwrite('static/test.jpg', con_img)
         # Serialize the result, you can add additional fields
         return jsonify(result='static/test.jpg')
 
