@@ -3,27 +3,32 @@ Landmark Searching Based on Hand-Painted Building Lines
 Google ML Winter Camp 2020  Project 
 
 ## Background
-![1.png](pic/1.png)
+<img src='pic/1.png' width=325>
 
 ## Tech
 We use three models to realize the process of image reconstruction, object detection and image similarity comparison.
 
-![2.png](pic/2.png)
+<img src='pic/2.png' width=325>
 
 ### Image Reconstruction
 Model: `CycleGAN`
 
-![3.png](pic/3.png)
+<img src='pic/3.png' width=325>
 
 ### Detection
 Model: `Retinanet` + `FCOS`
 
-![4.png](pic/4.png)
+<img src='pic/4.png' width=325>
 
 ### Image Retrieval
 Model: reconstruct imgs + original imgs -> `autoencoder`
 
-![5.png](pic/5.png)
+<img src='pic/5.png' width=325>
 
 ## Demo
-![6.png](pic/6.png)
+``` python
+# place models
+cd webapp
+python app.py # demo will run on http://127.0.0.1:5000/
+```
+<img src='pic/6.png' width=325>
