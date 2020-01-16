@@ -130,3 +130,11 @@ dmypy.json
 
 Data/
 .gitignore
+
+AutoEncoder/AutoEncoder.ckpt.data-00000-of-00001
+AutoEncoder/AutoEncoder.ckpt.index
+AutoEncoder/AutoEncoder.ckpt.meta
+AutoEncoder/checkpoint
+AutoEncoder/origin_img/
+AutoEncoder/reconstruct_img/
+CycleGAN/pretrained/
