@@ -10,6 +10,7 @@ import scipy.misc
 import numpy as np
 from time import gmtime, strftime
 import cv2
+import os
 
 pp = pprint.PrettyPrinter()
 
@@ -18,7 +19,7 @@ get_stddev = lambda x, k_h, k_w: 1/math.sqrt(k_w*k_h*x.get_shape()[-1])
 # -----------------------------
 # new added functions for pix2pix
 
-label_filename = 'datasets/landmark/boxes_split.csv'
+label_filename = os.path.join(__file__, 'datasets/landmark/boxes_split.csv')
 label = {}
 with open(label_filename) as f:
     lines = f.readlines()[1:]
