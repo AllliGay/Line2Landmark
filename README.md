@@ -1,5 +1,5 @@
 # Line2Landmark
-Landmark Searching Based on Hand-Painted Building Lines  
+Landmark Searching Based on Hand-Painted Building Lines  
 Google ML Winter Camp 2020  Project 
 
 ## Background
