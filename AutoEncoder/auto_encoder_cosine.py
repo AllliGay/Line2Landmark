@@ -9,17 +9,19 @@ import os, sys, cv2
 import matplotlib
 matplotlib.use('Agg')  
 import matplotlib.pyplot as plt
+from tensorflow.python.framework import graph_util
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 # Hyper Parameters
 weight_decay = 1e-5
 #weight_decay = 0
 batch_size = 128
-epoches = 10
+epoches = 40
 model_path = '/home/zjc793532302/AE_models/'
 image_size = 112
 img_channels = 3
+dir_name = 'CycleGAN_data'
 
 def batch_normalization(x, training, scope):
     with arg_scope([batch_norm],
@@ -51,8 +53,8 @@ def AutoEncoder(train_x, training):
         feature_down = tf.reshape(conv3, [-1, 14*14*256])
         feature_down = tf.nn.relu(batch_normalization(tf.layers.dense(feature_down, 1024), \
                 training=training, scope='feature_down_bn'))
-        feature_out = tf.layers.dense(feature_down, 256)
-
+        feature_out = tf.layers.dense(feature_down, 256, )
+        
         feature_up = tf.nn.relu(tf.layers.dense(feature_out, 1024))
         feature_up = tf.nn.relu(batch_normalization(tf.layers.dense(feature_up, 14*14*256), \
                 training=training, scope='feature_up_bn'))
@@ -65,10 +67,12 @@ def AutoEncoder(train_x, training):
         deconv6 = tf.nn.relu(batch_normalization(tf.layers.conv2d_transpose(deconv5, use_bias=False, filters=32, \
                 kernel_size=[3, 3], strides=2, padding='SAME'), training=training, scope='bn6'))
         final = tf.nn.sigmoid(tf.layers.conv2d(deconv6, use_bias=False, filters=3, kernel_size=[3, 3], padding='SAME'))
-
+        
     return feature_out, final
 
+
 def train(learning_rate = 0.001):
+
 
     def cosine(feature1, feature2):
         len1 = tf.sqrt(tf.reduce_mean(feature1 * feature1, 1))
@@ -76,55 +80,48 @@ def train(learning_rate = 0.001):
         mul = tf.reduce_mean(feature1 * feature2, 1)
         similarity = tf.reduce_mean(tf.div(mul, len1 * len2 + 1e-8))
         return similarity
+
     # tf placeholder
     input_x = tf.placeholder(tf.float32, [None, 112, 112, 3])    # value in the range of (0, 1)
     label_x = tf.placeholder(tf.float32, [None, 112, 112, 3])    # value in the range of (0, 1)
-    #origin_x = tf.placeholder(tf.float32, [None, 112, 112, 3])    # value in the range of (0, 1)
+
     LR = tf.placeholder(tf.float32)
     training = tf.placeholder(tf.bool)
     feature_out, decoded = AutoEncoder(input_x, training)
-    #feature1, decoded1 = AutoEncoder(input_x, training)
-    #feature2, decoded2 = AutoEncoder(origin_x, training)
     loss = tf.losses.mean_squared_error(labels=label_x, predictions=decoded) * 100
-    #loss = tf.losses.mean_squared_error(labels=input_x, predictions=decoded1) * 100 + tf.losses.mean_squared_error(labels=origin_x, predictions=decoded2) * 100
     l2_loss = tf.add_n([tf.nn.l2_loss(var) for var in tf.trainable_variables()]) * weight_decay
     feature1 = feature_out[::2]
     feature2 = feature_out[1::2]
     cos_loss = 1 - cosine(feature1, feature2)
-    train_op = tf.train.AdamOptimizer(LR).minimize(loss + l2_loss + cos_loss)
+    train_op = tf.train.AdamOptimizer(LR).minimize(loss)# + l2_loss + cos_loss)
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver(tf.global_variables())
-    #saver = tf.train.Saver(tf.global_variables())
-    #saver.restore(sess, model_path + 'AutoEncoder.ckpt')
 
     img_names = []
     bboxes = []
-    dir_name = 'CycleGAN_data'
+    
     files = os.listdir('/home/zjc793532302/GoogleLandmark/{}'.format(dir_name))
     for f in files:
         if '.jpg' not in f or f[:4] == 'test':
             continue
         img_names.append('/home/zjc793532302/GoogleLandmark/{}/'.format(dir_name)+f)
     
+    boxes = {}
+    with open('/home/zjc793532302/GoogleLandmark/bboxes.csv') as f:
+        lines = f.readlines()
+    for line in lines:
+        info = line.strip().split(',')
+        boxes[info[0]] = info[1].split()
+    
     val_imgs = img_names[-100:]
     img_names = img_names[:-100]
-    #for line in lines:
-    #    if os.path.exists('/home/zjc793532302/GoogleLandmark/train/train_data/{}.jpg'.format(line.strip().split(',')[0])):
-    #        img_names.append('/home/zjc793532302/GoogleLandmark/train/train_data/{}.jpg'.format(line.strip().split(',')[0]))
-    #        box = line.strip().split(',')[1].split()
-    #        bboxes.append([float(box[i]) for i in range(4)])
     
-    def get_edge(image):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # 灰度图像
-        gray = cv2.GaussianBlur(gray, (5, 5), 0)  # 高斯模糊
-        edged = cv2.Canny(gray, 75, 200)  # 边缘检测
-        return edged
                              
     steps = len(img_names) // batch_size
     for epoch in range(epoches):
-        if epoch in [6]:
+        if epoch in [20, 30]:
             learning_rate /= 10
         idx = 0
         #np.random.shuffle(train_x)
@@ -133,35 +130,26 @@ def train(learning_rate = 0.001):
             images = []
             origin_images = []
             for i in range(batch_size):
-                #print(img_path)
                 img_path = img_names[idx+i]
-                #box = bboxes[idx+i]
                 img = cv2.imread(img_path)
-                #shape = img.shape
-                #img = img[int(box[0]*shape[0]):int(box[2]*shape[0]),int(box[1]*shape[1]):int(box[3]*shape[1]),:]
                 img = cv2.resize(img, (image_size, image_size))
-                #cv2.imwrite('results/{}.jpg'.format(i),img)
                 images.append(np.array(img.reshape(1, image_size, image_size, img_channels), np.float32))
                 
                 origin_img = cv2.imread('/home/zjc793532302/GoogleLandmark/train/train_data/{}'.format(img_path.split('/')[-1]))
-                #print('/home/zjc793532302/GoogleLandmark/test/test/{}'.format(img_path.split('/')[-1]))
+                box = boxes[img_path.split('/')[-1][:-4]]
+                shape = origin_img.shape
+                origin_img = origin_img[int(shape[0]*float(box[0])):int(shape[0]*float(box[2])),\
+                                        int(shape[1]*float(box[1])):int(shape[1]*float(box[3]))]
+                
                 origin_img = cv2.resize(origin_img, (image_size, image_size))
-                #origin_images.append(np.array(origin_img.reshape(1, image_size, image_size, img_channels), np.float32))
                 images.append(np.array(origin_img.reshape(1, image_size, image_size, img_channels), np.float32))
-                #image = get_edge(origin_img)
-                #images.append(np.array(image.reshape(1, image_size, image_size, img_channels), np.float32))
-                #print(images[0].shape)
+
             images = np.concatenate(images, axis=0)
-            #origin_images = np.concatenate(origin_images, axis=0)
             train_data = images #cv2.imread -> BGR
-            #train_data = images
             train_data = train_data / 255
             
             label_data = train_data.copy()
             label_data[::2] = train_data[1::2]
-            #origin_data = origin_images[..., 0] * 0.114 + origin_images[..., 1] * 0.587 + origin_images[..., 2] * 0.299 
-            #origin_data = origin_images
-            #origin_data = origin_data / 255
             idx += batch_size
             
             _, mse_loss, weight_loss, sim_loss = sess.run([train_op, loss, l2_loss, cos_loss], \
@@ -175,41 +163,35 @@ def train(learning_rate = 0.001):
                     origin_images = []
                     for img_path in val_imgs[i*100 : i*100+100]:
                         img = cv2.imread(img_path)
-                        #shape = img.shape
-                        #img = img[int(box[0]*shape[0]):int(box[2]*shape[0]),int(box[1]*shape[1]):int(box[3]*shape[1]),:]
                         img = cv2.resize(img, (image_size, image_size))
-                        #cv2.imwrite('results/{}.jpg'.format(i),img)
                         images.append(np.array(img.reshape(1, image_size, image_size, img_channels), np.float32))
                 
                         origin_img = cv2.imread('/home/zjc793532302/GoogleLandmark/train/train_data/{}'.format(img_path.split('/')[-1]))
+                        box = boxes[img_path.split('/')[-1][:-4]]
+                        shape = origin_img.shape
+                        origin_img = origin_img[int(shape[0]*float(box[0])):int(shape[0]*float(box[2])),\
+                                        int(shape[1]*float(box[1])):int(shape[1]*float(box[3]))]
                         origin_img = cv2.resize(origin_img, (image_size, image_size))
                         images.append(np.array(origin_img.reshape(1, image_size, image_size, img_channels), np.float32))
                         
                     images = np.concatenate(images, axis=0)
-                    #origin_images = np.concatenate(origin_images, axis=0)
-                    #train_data = images[..., 0] * 0.114 + images[..., 1] * 0.587 + images[..., 2] * 0.299  #cv2.imread -> BGR
                     test_data = images
                     test_data = test_data / 255
                     label_data = test_data.copy()
                     label_data[::2] = test_data[1::2]
-                    #origin_data = origin_images
-                    #origin_data = origin_data / 255
                     tmp_loss, val_sim_loss = sess.run([loss, cos_loss], {input_x: test_data, label_x:label_data, training: False})
                     val_loss += tmp_loss
                     vsim_loss += val_sim_loss
                 val_loss /= len(val_imgs) // 100
                 vsim_loss /= len(val_imgs) // 100
-
-                #from IPython import embed
-                #embed()
+ 
                 print('epoch:{} step:{} mse_loss:{:.4f} l2_loss:{:.4f} cos_loss:{:.4f} val_loss:{:.4f} val_sim_loss:{:.4f}'.format(epoch, step, mse_loss, weight_loss, sim_loss, val_loss, vsim_loss))
-            #if step % 1 == 0:
-                #print('epoch:{} step:{} mse_loss:{:.4f} l2_loss:{:.4f} cos_loss:{:.4f}'.format(epoch, step, mse_loss, weight_loss, sim_loss))
         saver.save(sess=sess, save_path=model_path + 'AutoEncoder.ckpt')
     
     return 
 
-def predict(image):
+    
+def predict(test_imgs, test_img=None):
     # tf placeholder
     input_x = tf.placeholder(tf.float32, [None, 112, 112, 3])    # value in the range of (0, 1)
     training = tf.placeholder(tf.bool)
@@ -219,29 +201,47 @@ def predict(image):
     saver = tf.train.Saver(tf.global_variables())
     saver.restore(sess, model_path + 'AutoEncoder.ckpt')
     
+    boxes = {}
+    with open('/home/zjc793532302/GoogleLandmark/bboxes.csv') as f:
+        lines = f.readlines()
+    for line in lines:
+        info = line.strip().split(',')
+        boxes[info[0]] = info[1].split()
+        
     data = []
     origin_data = []
     for path in test_imgs:
         image = cv2.imread(path)
         image = cv2.resize(image, (image_size, image_size))
         image = np.array(image.reshape(-1, image_size, image_size, img_channels),np.float32)
-        #images = images[..., 0] * 0.114 + images[..., 1] * 0.587 + images[..., 2] * 0.299  #cv2.imread -> BGR
         image = image / 255
         feature, prediction = sess.run([feature_out, decoded], {input_x: image, training: False})
-        #feature, prediction = predict(image)
         data.append((feature, path.split('/')[-1], np.squeeze(np.array(prediction*255, np.uint8))))
-            
+        
         origin_img = cv2.imread('/home/zjc793532302/GoogleLandmark/train/train_data/{}'.format(path.split('/')[-1]))
+        box = boxes[path.split('/')[-1][:-4]]
+        shape = origin_img.shape
+        origin_img = origin_img[int(shape[0]*float(box[0])):int(shape[0]*float(box[2])),\
+                                int(shape[1]*float(box[1])):int(shape[1]*float(box[3]))]
+        
         origin_img = cv2.resize(origin_img, (image_size, image_size))
         origin_img = np.array(origin_img.reshape(-1, image_size, image_size, img_channels),np.float32)
-        #images = images[..., 0] * 0.114 + images[..., 1] * 0.587 + images[..., 2] * 0.299  #cv2.imread -> BGR
         origin_img = origin_img / 255
         feature, prediction = sess.run([feature_out, decoded], {input_x: origin_img, training: False})
-        #feature, prediction = predict(origin_img)
+
         origin_data.append((feature, path.split('/')[-1], np.squeeze(np.array(prediction*255, np.uint8))))
     
+    if test_img != None:
+        image = cv2.imread(test_img)
+        image = cv2.resize(image, (image_size, image_size))
+        image = np.array(image.reshape(-1, image_size, image_size, img_channels),np.float32)
+        image = image / 255
+        feature, prediction = sess.run([feature_out, decoded], {input_x: image, training: False})
+        
+        return data, origin_data, feature
+    
     return data, origin_data
-
+    
 def cosine(feature1, feature2):
     len1 = np.sqrt(np.mean(feature1 * feature1, 1))
     len2 = np.sqrt(np.mean(feature2 * feature2, 1))
@@ -249,18 +249,42 @@ def cosine(feature1, feature2):
     similarity = np.mean(np.divide(mul, len1 * len2 + 1e-8))
     return similarity
     
+def get_sim_image(image_path):
+    img_names = []
+    files = os.listdir('/home/zjc793532302/GoogleLandmark/'+dir_name)
+    for f in files:
+        if '.jpg' not in f or f[:4] == 'test':
+            continue
+        img_names.append('/home/zjc793532302/GoogleLandmark/{}/'.format(dir_name)+f)
+    test_imgs = img_names[-100:]
+    
+    data, origin_data, feature = predict(test_imgs, sys.argv[1])
+
+    val = -1
+    name = ''
+    for i in range(len(origin_data)):
+        feature1, name1, image = origin_data[i]
+        cos_val = cosine(feature1, feature)
+        #print(name1, cos_val)
+        if cos_val > val:
+            val = cos_val
+            name = name1
+    
+    print('Find the similar image with the name:{} val:{}'.format(name,val))
+    return cv2.imread('/home/zjc793532302/GoogleLandmark/train/train_data/'+name)
+    
 if __name__ == '__main__':
 
-    if len(sys.argv) > 1:
-        image = cv2.imread(sys.argv[1])
-        img_names = []
-        files = os.listdir('/home/zjc793532302/GoogleLandmark/AE_data')
-        for f in files:
-            if '.jpg' not in f or f[:4] == 'test':
-                continue
-            img_names.append('/home/zjc793532302/GoogleLandmark/AE_data/'+f)
-            test_imgs = img_names[-100:]
-        
+    img_names = []
+    files = os.listdir('/home/zjc793532302/GoogleLandmark/'+dir_name)
+    for f in files:
+        if '.jpg' not in f or f[:4] == 'test':
+            continue
+        img_names.append('/home/zjc793532302/GoogleLandmark/{}/'.format(dir_name)+f)
+    test_imgs = img_names[-100:]
+    
+    if len(sys.argv) > 1 and sys.argv[1] == '1':
+
         data, origin_data = predict(test_imgs)
         
         result = []
@@ -281,8 +305,8 @@ if __name__ == '__main__':
                 cv2.imwrite('/home/zjc793532302/results/{}'.format(name), img)
         print(result)
         print(len(result))
-        from IPython import embed
-        #embed()
-        #cv2.imwrite('/home/zjc793532302/AE_results/{}'.format(sys.argv[1].split('/')[-1]),np.array(prediction.reshape(image_size, image_size, img_channels)*255, np.uint8))
+    elif len(sys.argv) > 1 and sys.argv[1] != '1':
+        get_sim_image(sys.argv[1])
+                
     else:
         train()
