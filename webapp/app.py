@@ -28,6 +28,9 @@ elif MODEL_NAME is 'CycleGAN':
     cyclegan_model_path = '../CycleGAN/pretrained/line2pic.pb'
 
 from AutoEncoder.auto_encoder_cosine import get_sim_image
+from AutoEncoder.model import model as AE_model
+sess = tf.Session()
+ae_model = AE_model(sess)
 
 # Declare a flask app
 app = Flask(__name__)
@@ -67,14 +70,19 @@ def predict():
 
         # Make prediction
         generate_img = gan_model_predict(img)
+        # generate_img = cv2.imread('../data/AE/reconstruct_img/0da5df5b00bb9eee.jpg')
 
-        match_img = get_sim_image('static/test.jpg')
+        # match_img = get_sim_image('static/test.jpg')
+        match_img = ae_model.get_sim_image('static/test.jpg')
 
+        # match_img = cv2.imread('static/0da5df5b00bb9eee.jpg')
         match_img = cv2.resize(match_img, (generate_img.shape[1], generate_img.shape[0]))
         con_img = np.concatenate((generate_img, match_img), 1)
-        cv2.imwrite('static/test.jpg', con_img)
+        rd = np.random.randint(1, 1000000)
+        file_name = 'static/test'+str(rd)+'.jpg'
+        cv2.imwrite(file_name, con_img)
         # Serialize the result, you can add additional fields
-        return jsonify(result='static/test.jpg')
+        return jsonify(result=file_name)
 
     return None
 
