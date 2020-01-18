@@ -1,3 +1,6 @@
+poster and slides on Google drive:
+https://drive.google.com/drive/folders/1FefDClzqGG3ae_49_S0vL0LamCKu64bF
+
 # Line2Landmark
 Landmark Searching Based on Hand-Painted Building Lines  
 Google ML Winter Camp 2020  Project 
